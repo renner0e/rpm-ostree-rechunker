@@ -94,11 +94,28 @@ build $target_image=image_name $tag=default_tag:
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
     fi
 
-    podman build \
+    sudo podman build \
         "${BUILD_ARGS[@]}" \
         --pull=newer \
         --tag "${target_image}:${tag}" \
         .
+
+# flatten layers
+# https://coreos.github.io/rpm-ostree/build-chunked-oci/
+# needs root :(
+rechunk $target_image=image_name $tag=default_tag:
+  #!/usr/bin/env bash
+  set -eoux pipefail
+
+  sudo podman run --rm \
+    --privileged \
+    -v /var/lib/containers:/var/lib/containers \
+    "quay.io/fedora/fedora-bootc:latest" \
+    /usr/libexec/bootc-base-imagectl rechunk \
+        localhost/${target_image}:${tag} \
+        localhost/${target_image}:${tag}
+
+build-rechunked: build rechunk
 
 # Command: _rootful_load_image
 # Description: This script checks if the current user is root or running under sudo. If not, it attempts to resolve the image tag using podman inspect.
